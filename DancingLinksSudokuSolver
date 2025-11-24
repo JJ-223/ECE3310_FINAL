@@ -130,3 +130,115 @@ public:
         return false;
     }
 };
+// Assumes DLX class is already defined
+const int N = 9;
+const int N2 = N * N;       // 81
+const int N3 = N * N * N;   // 729
+const int COLS = 4 * N2;    // 324
+
+// Helper: compute box index
+inline int boxIndex(int r, int c) {
+    return (r / 3) * 3 + (c / 3);
+}
+
+// Build the DLX matrix for Sudoku
+DLX buildSudokuDLX() {
+    DLX dlx(COLS);
+
+    // For each possible (row, col, digit)
+    for (int r = 0; r < N; r++) {
+        for (int c = 0; c < N; c++) {
+            for (int d = 0; d < N; d++) {
+                vector<int> colIndices(4);
+                colIndices[0] = r * N + c;                // cell constraint
+                colIndices[1] = N2 + r * N + d;          // row constraint
+                colIndices[2] = 2 * N2 + c * N + d;      // column constraint
+                colIndices[3] = 3 * N2 + boxIndex(r, c) * N + d; // box constraint
+
+                vector<Node*> rowNodes;
+                int rowID = r * N2 + c * N + d; // unique row identifier
+                for (int idx : colIndices)
+                    rowNodes.push_back(dlx.addNode(idx, rowID));
+
+                dlx.linkRow(rowNodes);
+            }
+        }
+    }
+
+    return dlx;
+}
+
+void applyInitialSudoku(DLX &dlx, const vector<vector<int>> &grid) {
+    for (int r = 0; r < 9; r++) {
+        for (int c = 0; c < 9; c++) {
+            int d = grid[r][c];
+            if (d == 0) continue; // skip empty
+
+            int rowID = r * 81 + c * 9 + (d - 1); // unique rowID
+
+            // Find the row nodes
+            Node* rowNode = nullptr;
+            for (auto n : dlx.nodes) {
+                if (n->rowID == rowID) {
+                    rowNode = n;
+                    break;
+                }
+            }
+
+            if (!rowNode) continue; // safety check
+
+            // Cover all columns in this row
+            Node* cur = rowNode;
+            do {
+                dlx.cover(cur->C);
+                cur = cur->R;
+            } while (cur != rowNode);
+        }
+    }
+}
+
+bool solveSudoku(DLX &dlx) {
+    return dlx.search(); // returns true if solution exists
+}
+
+vector<vector<int>> extractSolution(const vector<int> &solution) {
+    vector<vector<int>> grid(9, vector<int>(9, 0));
+
+    for (int rowID : solution) {
+        int r = rowID / 81;
+        int c = (rowID / 9) % 9;
+        int d = (rowID % 9) + 1;
+        grid[r][c] = d;
+    }
+
+    return grid;
+}
+
+int main() {
+    using namespace std;
+    
+    vector<vector<int>> puzzle = {
+        {5,3,0,0,7,0,0,0,0},
+        {6,0,0,1,9,5,0,0,0},
+        {0,9,8,0,0,0,0,6,0},
+        {8,0,0,0,6,0,0,0,3},
+        {4,0,0,8,0,3,0,0,1},
+        {7,0,0,0,2,0,0,0,6},
+        {0,6,0,0,0,0,2,8,0},
+        {0,0,0,4,1,9,0,0,5},
+        {0,0,0,0,8,0,0,7,9}
+    };
+
+    DLX dlx = buildSudokuDLX();
+    applyInitialSudoku(dlx, puzzle);
+
+    if (solveSudoku(dlx)) {
+        auto solutionGrid = extractSolution(dlx.solution);
+        for (auto &row : solutionGrid) {
+            for (int val : row) cout << val << " ";
+            cout << endl;
+        }
+    } else {
+        cout << "No solution exists!" << endl;
+    }
+}
