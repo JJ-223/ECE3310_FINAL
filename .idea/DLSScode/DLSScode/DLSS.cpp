@@ -27,10 +27,12 @@ public:
 
     vector<int> solution;
 
-    DLX(int numCols) {
+    DLX(int numCols) : head() {
+        head.L = &head;
+        head.R = &head;
         cols.reserve(numCols);
         for (int i = 0; i < numCols; i++) {
-            Column* c = new Column(std::to_string(i));
+            Column* c = new Column(to_string(i));
             cols.push_back(c);
             insertColumn(c);
         }
@@ -43,11 +45,12 @@ public:
 
 private:
     void insertColumn(Column* c) {
-        c->R = head.R;
-        c->L = &head;
-        head.R->L = c;
-        head.R = c;
+        c->R = &head;       // new column points right to head
+        c->L = head.L;      // left points to the last column
+        head.L->R = c;      // last column's right points to new column
+        head.L = c;          // head's left points to new column
     }
+
 public:
     Node* addNode(int colIndex, int rowID) {
         Column* c = cols[colIndex];
@@ -171,15 +174,30 @@ DLX buildSudokuDLX() {
     return dlx;
 }
 
+
 void applyInitialSudoku(DLX& dlx, const vector<vector<int>>& grid) {
+    // Step 1: Validate the grid size
+    if (grid.size() != 9) {
+        throw std::invalid_argument("Grid must have 9 rows");
+    }
+    for (int r = 0; r < 9; ++r) {
+        if (grid[r].size() != 9) {
+            throw std::invalid_argument("Each row in the grid must have 9 columns");
+        }
+    }
+
+    // Now proceed with applying the Sudoku numbers
     for (int r = 0; r < 9; r++) {
         for (int c = 0; c < 9; c++) {
             int d = grid[r][c];
             if (d == 0) continue; // skip empty
 
+            if (d < 1 || d > 9) {
+                throw std::invalid_argument("Grid values must be between 0 and 9");
+            }
+
             int rowID = r * 81 + c * 9 + (d - 1); // unique rowID
 
-            // Find the row nodes
             Node* rowNode = nullptr;
             for (auto n : dlx.nodes) {
                 if (n->rowID == rowID) {
@@ -188,7 +206,10 @@ void applyInitialSudoku(DLX& dlx, const vector<vector<int>>& grid) {
                 }
             }
 
-            if (!rowNode) continue; // safety check
+            if (!rowNode) {
+                std::cerr << "Warning: RowID not found: " << rowID << "\n";
+                continue; // safety check
+            }
 
             // Cover all columns in this row
             Node* cur = rowNode;
@@ -233,6 +254,15 @@ int main() {
     };
 
     DLX dlx = buildSudokuDLX();
+    int rowID = r * 81 + c * 9 + (d - 1); // unique rowID
+
+    if (rowID < 0 || rowID >= 9 * 9 * 9) { // 9*9*9 = 729 possible rows
+        throw std::out_of_range("Computed rowID is out of valid range: " + std::to_string(rowID));
+    }
+    if (dlx.nodes.empty()) {
+        cerr << "Error: DLX nodes not populated!" << endl;
+        return;
+    }
     applyInitialSudoku(dlx, puzzle);
 
     if (solveSudoku(dlx)) {
