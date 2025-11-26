@@ -153,8 +153,8 @@ inline int boxIndex(int r, int c) {
 }
 
 void buildSudokuDLX(DLX& dlx) {
-    for (int r = 0; r < 9; r++){
-        for (int c = 0; c < 9; c++){
+    for (int r = 0; r < 9; r++) {
+        for (int c = 0; c < 9; c++) {
             for (int d = 0; d < 9; d++) {
 
                 int rowID = r * 81 + c * 9 + d;
@@ -218,6 +218,36 @@ vector<vector<int>> extractSolution(const vector<int>& sol) {
     return grid;
 }
 
+bool checkSudoku(const vector<vector<int>>& grid) {
+    // Check rows and columns
+    for (int i = 0; i < 9; i++) {
+        vector<bool> row(10, false), col(10, false);
+        for (int j = 0; j < 9; j++) {
+            int rv = grid[i][j], cv = grid[j][i];
+            if (rv < 1 || rv > 9 || cv < 1 || cv > 9) return false;
+            if (row[rv] || col[cv]) return false;
+            row[rv] = col[cv] = true;
+        }
+    }
+
+    // Check 3x3 boxes
+    for (int br = 0; br < 9; br += 3) {
+        for (int bc = 0; bc < 9; bc += 3) {
+            vector<bool> box(10, false);
+            for (int r = 0; r < 3; r++) {
+                for (int c = 0; c < 3; c++) {
+                    int v = grid[br + r][bc + c];
+                    if (box[v]) return false;
+                    box[v] = true;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+
 int main() {
     vector<vector<int>> puzzle = {
         {5,3,0,0,7,0,0,0,0},
@@ -245,5 +275,13 @@ int main() {
     else {
         cout << "No solution exists\n";
     }
+
+    if (checkSudoku(extractSolution(dlx.solution)))
+        cout << "\nSolution is valid!\n";
+    else
+        cout << "\nSolution is invalid!\n";
+
 }
+
+
 
