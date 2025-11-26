@@ -295,6 +295,21 @@ vector<vector<int>> generateRandomSudoku(int removeCells = 40) {
     return grid;
 }
 
+void printSudoku(const vector<vector<int>>& grid, const string& label) {
+    cout << label << ":\n";
+    for (int r = 0; r < 9; r++) {
+        if (r % 3 == 0 && r != 0) cout << "------+-------+------\n";
+        for (int c = 0; c < 9; c++) {
+            if (c % 3 == 0 && c != 0) cout << "| ";
+            if (grid[r][c] == 0)
+                cout << ". ";
+            else
+                cout << grid[r][c] << " ";
+        }
+        cout << "\n";
+    }
+}
+
 int main() {
     /*vector<vector<int>> puzzle = {
         {5,3,0,0,7,0,0,0,0},
@@ -310,11 +325,12 @@ int main() {
 
     vector<vector<int>> puzzle = generateRandomSudoku(40);
 
-    cout << "Puzzle:\n";
+    printSudoku(puzzle, "Puzzle");
+    /* cout << "Puzzle:\n";
     for (auto& row : puzzle) {
         for (int v : row) cout << v << " ";
         cout << "\n";
-    }
+    }*/
 
     DLX dlx(COLS);
     buildSudokuDLX(dlx);
@@ -322,11 +338,13 @@ int main() {
 
     if (dlx.search()) {
         auto out = extractSolution(dlx.solution);
-        cout << "\nSolution:\n";
+        cout << "\n";
+        printSudoku(out, "Solution");
+        /*cout << "\nSolution:\n";
         for (auto& row : out) {
             for (int v : row) cout << v << " ";
             cout << "\n";
-        }
+        }*/
         
     }
     else {
