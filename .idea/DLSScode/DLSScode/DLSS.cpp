@@ -2,6 +2,9 @@
 #include <string>
 #include <iostream>
 #include <stdexcept>
+#include <algorithm>
+#include <random>
+#include <functional>
 
 using namespace std;
 
@@ -247,9 +250,53 @@ bool checkSudoku(const vector<vector<int>>& grid) {
     return true;
 }
 
+vector<vector<int>> generateRandomSudoku(int removeCells = 40) {
+    vector<vector<int>> grid(9, vector<int>(9, 0));
+    vector<int> nums{ 1,2,3,4,5,6,7,8,9 };
+    auto engine = default_random_engine(random_device{}());
+
+    // Check if we can place val at (r,c)
+    auto canPlace = [&](int r, int c, int val) {
+        for (int i = 0; i < 9; i++) {
+            if (grid[r][i] == val) return false;
+            if (grid[i][c] == val) return false;
+            int br = 3 * (r / 3) + i / 3;
+            int bc = 3 * (c / 3) + i % 3;
+            if (grid[br][bc] == val) return false;
+        }
+        return true;
+    };
+
+    // Backtracking fill
+    function<bool(int, int)> fill = [&](int r, int c) {
+        if (r == 9) return true;
+        int nr = c == 8 ? r + 1 : r;
+        int nc = c == 8 ? 0 : c + 1;
+        shuffle(nums.begin(), nums.end(), engine);
+        for (int val : nums) {
+            if (canPlace(r, c, val)) {
+                grid[r][c] = val;
+                if (fill(nr, nc)) return true;
+                grid[r][c] = 0;
+            }
+        }
+        return false;
+    };
+
+    fill(0, 0);
+
+    // Remove some cells to make the puzzle
+    vector<pair<int, int>> positions;
+    for (int i = 0; i < 9; i++) for (int j = 0; j < 9; j++) positions.emplace_back(i, j);
+    shuffle(positions.begin(), positions.end(), engine);
+    for (int k = 0; k < removeCells; k++)
+        grid[positions[k].first][positions[k].second] = 0;
+
+    return grid;
+}
 
 int main() {
-    vector<vector<int>> puzzle = {
+    /*vector<vector<int>> puzzle = {
         {5,3,0,0,7,0,0,0,0},
         {6,0,0,1,9,5,0,0,0},
         {0,9,8,0,0,0,0,6,0},
@@ -259,7 +306,15 @@ int main() {
         {0,6,0,0,0,0,2,8,0},
         {0,0,0,4,1,9,0,0,5},
         {0,0,0,0,8,0,0,7,9}
-    };
+    };*/
+
+    vector<vector<int>> puzzle = generateRandomSudoku(40);
+
+    cout << "Puzzle:\n";
+    for (auto& row : puzzle) {
+        for (int v : row) cout << v << " ";
+        cout << "\n";
+    }
 
     DLX dlx(COLS);
     buildSudokuDLX(dlx);
@@ -267,10 +322,12 @@ int main() {
 
     if (dlx.search()) {
         auto out = extractSolution(dlx.solution);
+        cout << "\nSolution:\n";
         for (auto& row : out) {
             for (int v : row) cout << v << " ";
             cout << "\n";
         }
+        
     }
     else {
         cout << "No solution exists\n";
@@ -280,7 +337,6 @@ int main() {
         cout << "\nSolution is valid!\n";
     else
         cout << "\nSolution is invalid!\n";
-
 }
 
 
