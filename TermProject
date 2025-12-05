@@ -1,0 +1,390 @@
+#include <iostream>
+#include <utility>
+#include <vector>
+#include <string>
+#include <fstream>
+#include <algorithm>
+#include <cctype>
+
+using namespace std;
+
+struct Column;
+
+// ----------------- Core DLX structs -----------------
+
+struct Node {
+    Node *L, *R, *U, *D;
+    Column *C;     // Column this node belongs to
+    int rowID;     // For backtracking Sudoku solution
+
+    Node() : L(this), R(this), U(this), D(this), C(nullptr), rowID(-1) {}
+};
+
+struct Column : Node {
+    int size;       // Number of nodes in this column
+    std::string name;
+
+    explicit Column(std::string n = "") : Node(), size(0), name(std::move(n)) { C = this; }
+};
+
+// ----------------- DLX class -----------------
+
+class DLX {
+public:
+    Column head;              // Anchor
+    vector<Column*> cols;
+    vector<Node*> nodes;
+    vector<int> solution;
+
+    explicit DLX(int numCols) {
+        cols.reserve(numCols);
+        for (int i = 0; i < numCols; i++) {
+            auto* c = new Column(to_string(i));
+            cols.push_back(c);
+            insertColumn(c);
+        }
+    }
+
+    ~DLX() {
+        for (auto c : cols) delete c;
+        for (auto n : nodes) delete n;
+    }
+
+private:
+    void insertColumn(Column* c) {
+        c->R = head.R;
+        c->L = &head;
+        head.R->L = c;
+        head.R = c;
+    }
+
+public:
+    Node* addNode(int colIndex, int rowID) {
+        Column* c = cols[colIndex];
+        Node* n = new Node();
+        nodes.push_back(n);
+
+        // insert at bottom of column c
+        n->D = c;
+        n->U = c->U;
+        c->U->D = n;
+        c->U = n;
+
+        n->C = c;
+        c->size++;
+        n->rowID = rowID;
+        return n;
+    }
+
+    static void linkRow(const std::vector<Node*>& row) {
+        if (row.empty()) return;
+        int n = (int)row.size();
+        for (int i = 0; i < n; i++) {
+            Node* a = row[i];
+            Node* b = row[(i + 1) % n];
+            a->R = b;
+            b->L = a;
+        }
+    }
+
+    static void cover(Column* c) {
+        c->R->L = c->L;
+        c->L->R = c->R;
+
+        for (Node* row = c->D; row != c; row = row->D) {
+            for (Node* node = row->R; node != row; node = node->R) {
+                node->D->U = node->U;
+                node->U->D = node->D;
+                node->C->size--;
+            }
+        }
+    }
+
+    static void uncover(Column* c) {
+        for (Node* row = c->U; row != c; row = row->U) {
+            for (Node* node = row->L; node != row; node = node->L) {
+                node->C->size++;
+                node->D->U = node;
+                node->U->D = node;
+            }
+        }
+        c->R->L = c;
+        c->L->R = c;
+    }
+
+    bool search() {
+        if (head.R == &head) return true; // all constraints satisfied
+
+        // choose column with smallest size
+        Column* c = nullptr;
+        int minSize = 1e9;
+        for (auto* j = (Column*)head.R; j != &head; j = (Column*)j->R) {
+            if (j->size < minSize) {
+                minSize = j->size;
+                c = j;
+            }
+        }
+        if (!c || c->size == 0) return false; // dead end
+
+        cover(c);
+
+        for (Node* r = c->D; r != c; r = r->D) {
+            solution.push_back(r->rowID);
+
+            for (Node* j = r->R; j != r; j = j->R)
+                cover(j->C);
+
+            if (search()) return true;
+
+            for (Node* j = r->L; j != r; j = j->L)
+                uncover(j->C);
+
+            solution.pop_back();
+        }
+
+        uncover(c);
+        return false;
+    }
+};
+
+// ----------------- Sudoku-specific helpers -----------------
+
+const int N   = 9;
+const int N2  = N * N;    // 81
+const int COLS = 4 * N2;  // 324
+
+//Spot in box
+inline int boxIndex(int r, int c) {
+    return (r / 3) * 3 + (c / 3);
+}
+
+
+// Building all possibilities
+DLX buildSudokuDLX() {
+    DLX dlx(COLS);
+
+    // For each possible (row, col, digit)
+    for (int r = 0; r < N; r++) {
+        for (int c = 0; c < N; c++) {
+            for (int d = 0; d < N; d++) {
+                vector<int> colIndices(4);
+                colIndices[0] = r * N + c;                               // cell
+                colIndices[1] = N2 + r * N + d;                          // row-digit
+                colIndices[2] = 2 * N2 + c * N + d;                      // col-digit
+                colIndices[3] = 3 * N2 + boxIndex(r, c) * N + d;         // box-digit
+
+                vector<Node*> rowNodes;
+                int rowID = r * N2 + c * N + d; // (r,c,d) encoded 0–728
+                rowNodes.reserve(colIndices.size());
+                for (int idx : colIndices) {
+                    rowNodes.push_back(dlx.addNode(idx, rowID));
+                }
+
+                DLX::linkRow(rowNodes);
+            }
+        }
+    }
+
+    return dlx;
+}
+
+// Apply givens to DLX (force those candidates + record them in solution)
+void applyInitialSudoku(DLX &dlx, const vector<vector<int>> &grid) {
+    for (int r = 0; r < 9; r++) {
+        for (int c = 0; c < 9; c++) {
+            int d = grid[r][c];
+            if (d == 0) continue; // skip empty
+
+            int rowID = r * 81 + c * 9 + (d - 1);
+
+            Node* rowNode = nullptr;
+            for (auto n : dlx.nodes) {
+                if (n->rowID == rowID) {
+                    rowNode = n;
+                    break;
+                }
+            }
+
+            if (!rowNode) {
+                cerr << "ERROR: could not find rowID " << rowID << " for given ("
+                     << r << "," << c << ")=" << d << endl;
+                continue;
+            }
+
+            // record given as part of solution
+            dlx.solution.push_back(rowID);
+
+            // cover all columns touched by this row
+            Node* cur = rowNode;
+            do {
+                DLX::cover(cur->C);
+                cur = cur->R;
+            } while (cur != rowNode);
+        }
+    }
+}
+
+
+bool solveSudoku(DLX &dlx) {
+    return dlx.search();
+}
+
+
+// get solutions from rowIDs
+vector<vector<int>> extractSolution(const vector<int> &solution) {
+    vector<vector<int>> grid(9, vector<int>(9, 0));
+
+    for (int rowID : solution) {
+        int r = rowID / 81;
+        int c = (rowID / 9) % 9;
+        int d = (rowID % 9) + 1;
+        grid[r][c] = d;
+    }
+    return grid;
+}
+
+// ----------------- IO helpers -----------------
+
+// Handle sodoku Input
+bool readSudokuFromStream(istream& in, vector<vector<int>>& grid) {
+    grid.assign(9, vector<int>(9, 0));
+
+    for (int r = 0; r < 9; ++r) {
+        for (int c = 0; c < 9; ++c) {
+            int x;
+            if (!(in >> x)) {
+                return false;
+            }
+            if (x < 0 || x > 9) {
+                return false;
+            }
+            grid[r][c] = x;
+        }
+    }
+    return true;
+}
+
+// print board
+void printSudoku(const vector<vector<int>>& grid) {
+    for (const auto &row : grid) {
+        for (int val : row)
+            cout << val << " ";
+        cout << '\n';
+    }
+}
+
+// y/n prompt
+bool quit(const string& msg) {
+    while (true) {
+        cout << msg;
+        string inp;
+        if (!(cin >> inp)) {
+            return true;
+        }
+        transform(inp.begin(), inp.end(), inp.begin(),
+                  [](unsigned char ch){ return std::tolower(ch); });
+
+        if (inp == "y" || inp == "yes") return true;
+        if (inp == "n" || inp == "no")  return false;
+
+        cerr << "ERROR: Not valid input, enter 'y' or 'n'.\n";
+    }
+}
+
+// parse int with validation
+bool isInteger(const string& s, int& value) {
+    try {
+        size_t idx;
+        value = std::stoi(s, &idx);
+        return idx == s.size();
+    }
+    catch (...) {
+        return false;
+    }
+}
+
+// menu choice helper
+int getChoice(const string& msg, const vector<int>& options) {
+    while (true) {
+        cout << msg;
+        string inp;
+        if (!(cin >> inp)) {
+            cerr << "ERROR: Input failure.\n";
+            return options.front();
+        }
+
+        int choice;
+        if (isInteger(inp, choice) &&
+            find(options.begin(), options.end(), choice) != options.end())
+        {
+            return choice;
+        }
+
+        cout << "ERROR: Not a valid choice. Valid options are: ";
+        for (size_t i = 0; i < options.size(); ++i) {
+            cout << options[i];
+            if (i + 1 < options.size()) cout << " or ";
+        }
+        cout << ".\n";
+    }
+}
+
+// ----------------- main -----------------
+
+int main() {
+    cout << "=====================================================\n"
+            " Sudoku DLX Solver\n"
+            "=====================================================\n";
+
+    do {
+        vector<vector<int>> grid;
+        bool isValid = true;
+
+        int choice = getChoice(
+                "Choose input method:\n"
+                "\t1) Enter puzzle manually\n"
+                "\t2) Read puzzle from file\n"
+                "Enter choice (1 or 2): ",
+                {1, 2}
+        );
+
+        if (choice == 1) {
+            cout << "Enter 9 lines, each with 9 numbers (0-9, 0 = empty):\n";
+            if (!readSudokuFromStream(cin, grid)) {
+                cerr << "ERROR: Failed to read Sudoku from standard input.\n";
+                isValid = false;
+            }
+        } else { // choice == 2
+            cout << "Enter filename: ";
+            string filename;
+            cin >> filename;
+
+            ifstream fin(filename);
+            if (!fin) {
+                cerr << "ERROR: Could not open file: " << filename << '\n';
+                isValid = false;
+            } else if (!readSudokuFromStream(fin, grid)) {
+                cerr << "ERROR: Failed to read Sudoku from file.\n";
+                isValid = false;
+            }
+        }
+
+        if (isValid) {
+            DLX dlx = buildSudokuDLX();  // fresh DLX per puzzle
+            dlx.solution.clear();
+
+            applyInitialSudoku(dlx, grid);
+
+            if (solveSudoku(dlx)) {
+                auto solvedGrid = extractSolution(dlx.solution);
+                cout << "\nSolved Sudoku:\n";
+                printSudoku(solvedGrid);
+            } else {
+                cout << "\nNo solution found for this puzzle.\n";
+            }
+        }
+
+    } while (!quit("Would you like to quit (y or n): "));
+
+    return 0;
+}
