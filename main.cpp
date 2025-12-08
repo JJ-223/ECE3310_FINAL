@@ -1,11 +1,12 @@
-#include <iostream>
-#include <utility>
-#include <vector>
-#include <string>
-#include <fstream>
-#include <algorithm>
-#include <cctype>
-#include <random>
+// STL headers used throughout the Sudoku DLX solver
+#include <iostream>        // Input/output (cout, cin)
+#include <utility>         // Utility helpers (std::pair, std::move) 
+#include <vector>          // Dynamic arrays (used for gride, node storage, etc.)
+#include <string>          // String handling for column names and user input
+#include <fstream>         // File input when loading Sudoku puzzles from disk
+#include <algorithm>       // Algorithms like std::shuffle, std::find, std::transform
+#include <cctype>          // Character classification (to lower for user input)
+#include <random>          // Random number generation for Sudoku puzzle generator
 
 using namespace std;
 
@@ -507,8 +508,6 @@ int main() {
                 cout << "\nNo solution found for this puzzle.\n";
             }
         }
-
     } while (!quit("Would you like to quit (y or n): "));
-
     return 0;
 }
