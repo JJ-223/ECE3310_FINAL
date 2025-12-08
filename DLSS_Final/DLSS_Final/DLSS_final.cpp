@@ -1,4 +1,4 @@
-// STL headers used throughout the Sudoku DLX solver
+// STL headers used throughout the Sudoku DLX solver //
 #include <iostream>        // Input/output (cout, cin)
 #include <utility>         // Utility helpers (std::pair, std::move) 
 #include <vector>          // Dynamic arrays (used for gride, node storage, etc.)
@@ -12,8 +12,7 @@ using namespace std;
 
 struct Column;
 
-// ----------------- Core DLX structs -----------------
-
+// ----------------- Core DLX structs ----------------- //
 // A Node represents a single "1" in the exact cover matrix.
 // Each node is part of a 4-way doubly linked torodial structure used by Dancing Links
 struct Node {
@@ -26,30 +25,31 @@ struct Node {
     // Makes it easy to insert it into the torodial structure later
 };
 
+// Column header used by DLX. Inherits Node so it fits in the same
+// left-right / up-down linked structure.
 struct Column : Node {
-    int size;       // Number of nodes in this column
-    string name;
-
+    int size;       // Number of data nodes in this column
+    string name;    // Optional label (useful for debugging
     explicit Column(string n = "") : Node(), size(0), name(std::move(n)) {
         C = this; // Column header's C points to itself
     }
 };
 
-// ----------------- DLX class -----------------
-
+// ----------------- DLX class ----------------- //
+// DLX: Dancing Links implmentation for exact-cover problems (e.g: Sudoku)
 class DLX {
 public:
-    Column head;              // Anchor / header
+    Column head;              // Anchor / header of the column list
     vector<Column*> cols;     // Column headers
-    vector<Node*>   nodes;    // All data nodes we own
-    vector<int>     solution; // rowIDs of chosen rows
+    vector<Node*>   nodes;    // All data nodes in the matrix
+    vector<int>     solution; // rowIDs of chosen rows (partial/full solution)
 
-    // Non-copyable, non-movable (linked structure stores &head)
+    // Prevents copyiny or moving (linked structure stores &head, can't be trivially copied)
     DLX(const DLX&) = delete;
     DLX& operator=(const DLX&) = delete;
     DLX(DLX&&) = delete;
     DLX& operator=(DLX&&) = delete;
-
+    // Constructor: create numCols columns and link them into the header
     explicit DLX(int numCols) : head("head") {
         // Explicitly make header a self-loop
         head.L = head.R = head.U = head.D = &head;
@@ -59,19 +59,19 @@ public:
         for (int i = 0; i < numCols; i++) {
             auto* c = new Column(to_string(i));
             cols.push_back(c);
-            insertColumn(c);
+            insertColumn(c);    // link column to header list
         }
     }
 
     ~DLX() {
-        // Delete data nodes first, then column headers
+        // Clean-up: Delete data nodes first, then column headers
         for (auto* n : nodes) delete n;
         for (auto* c : cols)  delete c;
     }
 
 private:
-    void insertColumn(Column* c) {
-        // Insert c immediately to the right of head
+    // Insert c (a new column) immediately to the right of head
+    void insertColumn(Column* c) {    
         c->R = head.R;
         c->L = &head;
         head.R->L = c;
@@ -256,7 +256,7 @@ void buildSudokuDLX(DLX& dlx) {
                 vector<Node*> rowNodes;
                 rowNodes.reserve(4);
 
-                int rowID = r * N2 + c * N + d; // (r,c,d) encoded 0–728
+                int rowID = r * N2 + c * N + d; // (r,c,d) encoded 0â€“728
                 for (int idx : colIndices) {
                     rowNodes.push_back(dlx.addNode(idx, rowID));
                 }
