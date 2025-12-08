@@ -10,17 +10,20 @@
 
 using namespace std;
 
-// Forward declaration
 struct Column;
 
 // ----------------- Core DLX structs -----------------
 
+// A Node represents a single "1" in the exact cover matrix.
+// Each node is part of a 4-way doubly linked torodial structure used by Dancing Links
 struct Node {
-    Node *L, *R, *U, *D;
-    Column *C;     // Column this node belongs to
-    int rowID;     // Encodes (r,c,d) for Sudoku
+    Node *L, *R, *U, *D;        // Links to neighboring node (left, right, up, down)
+    Column *C;                  // Pointer to the column header this node belongs to
+    int rowID;                  // Encodes the Sudoku choice (r, c, d) as a single integer
 
     Node() : L(this), R(this), U(this), D(this), C(nullptr), rowID(-1) {}
+    // Constructor initializes the node to a self-loop in all directions.
+    // Makes it easy to insert it into the torodial structure later
 };
 
 struct Column : Node {
