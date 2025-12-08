@@ -1,9 +1,0 @@
-ECE 3310 Notes
-
-LinkedList
-
-int LinkedSearch (elementtype extra(?)){
-// if the element is not there, you get -1
-  int position = -1;
-  int counter = 0;
-}
